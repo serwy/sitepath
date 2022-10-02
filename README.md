@@ -130,9 +130,9 @@ The `develop` command takes its name from the setuptools interface.
 It adds the project directory to `sys.path` automatically, by
 placing the path in `site-packages/easy-install.pth`.
 
-The downside of using `develop` (from setup.py and from sitepath) is that everything in the path is potentially toplevel importable, since the path is added to `sys.path`. This is a consequence of using `.pth` files.
+The downside of using `develop` (from setup.py and from sitepath) is that everything in the path is potentially top-level importable, since the path is added to `sys.path`. This is a consequence of using `.pth` files.
 
-The prefered method is to use `link` instead of `develop`, if your platform permits it.
+The preferred method is to use `link` instead of `develop`, if your platform permits it.
 
 ### Modifying site-packages
 
