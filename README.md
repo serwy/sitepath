@@ -59,7 +59,7 @@ But if you really want it from PyPI:
 
 ## Useful Features
 
-Calling `python -m sitepath` prints out a useful information about your Python (virtual) environment:
+Calling `python -m sitepath` prints out useful information about your Python (virtual) environment:
 
 - virtual environment variables
 - sys.executable
