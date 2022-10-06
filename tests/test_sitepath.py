@@ -84,11 +84,28 @@ class TestSitePath(unittest.TestCase):
         argv = [''] + s.split()
         core.process(argv, self.top)
 
+
+    def can_symlink(self):
+        tmp = str(self.tmp_dir)
+        if not hasattr(self, '_can_symlink'):
+            # Windows requires special permissions to be able to symlink
+            with open(tmp + '/_base', 'w') as fp:
+                fp.write('base')
+            try:
+                os.symlink(tmp + '/_base', tmp + '/_symbase')
+                self._can_symlink = True
+            except OSError:
+                self._can_symlink = False
+
+        return self._can_symlink
+
     def test_info(self):
         self.do()
 
-    @unittest.skipIf(WINDOWS, 'Windows-platform')
     def test_link(self):
+        if not self.can_symlink():
+            raise unittest.SkipTest('platform disallows symlinks')
+
         self.do('link my_project')
 
         self.assertTrue((self.site_packages / 'my_project').is_symlink())
@@ -123,8 +140,10 @@ class TestSitePath(unittest.TestCase):
         self.assertFalse((self.site_packages / 'my_project').is_dir())
         self.assertTrue((self.user_site_packages / 'my_project').is_dir())
 
-    @unittest.skipIf(WINDOWS, 'Windows-platform')
     def test_relink(self):
+        if not self.can_symlink():
+            raise unittest.SkipTest('platform disallows symlinks')
+
         self.do('link my_project')
         self.do('link my_project')
         self.assertTrue((self.site_packages / 'my_project').is_symlink())
@@ -148,8 +167,10 @@ class TestSitePath(unittest.TestCase):
         self.do('uncopy my_file')
         self.assertFalse(spf.exists())
 
-    @unittest.skipIf(WINDOWS, 'Windows-platform')
     def test_file_link(self):
+        if not self.can_symlink():
+            raise unittest.SkipTest('platform disallows symlinks')
+
         spf = (self.site_packages / 'my_file.py')
         self.do('link my_file.py')
         self.assertTrue(spf.exists())
@@ -165,8 +186,10 @@ class TestSitePath(unittest.TestCase):
 
     # -- Test error conditions, invalid input, etc
 
-    @unittest.skipIf(WINDOWS, 'Windows-platform')
     def test_link_copy(self):
+        if not self.can_symlink():
+            raise unittest.SkipTest('platform disallows symlinks')
+
         self.do('link my_project')
         with self.assertRaises(core.SitePathException):
             self.do('copy my_project')
