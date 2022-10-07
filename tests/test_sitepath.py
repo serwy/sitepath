@@ -184,6 +184,11 @@ class TestSitePath(unittest.TestCase):
         self.do('undevelop my_file')
         self.assertFalse(spf.exists())
 
+    def test_help(self):
+        self.do('help')
+        self.do('-h')
+        self.do('--help')
+
     # -- Test error conditions, invalid input, etc
 
     def test_link_copy(self):

@@ -129,8 +129,8 @@ def get_crumb(p):
     return d
 
 
-def show_help():
-    fprint(stdout, '''  sitepath {version}
+def show_help(top):
+    fprint(top.stdout, '''  sitepath {version}
 ----------------------------------
 Commands available:
 
@@ -140,11 +140,11 @@ Commands available:
    copy      - copy a given file/directory to site-packages
    uncopy    - delete a given importable name, if it was copied.
 
-   develop   - add the current working directory to `sitepath-develop.pth`.
-   undevelop - remove the current working directory from `sitepath-develop.pth`.
+   develop   - add the parent directory of a project to a .sitepath.pth file
+   undevelop - removes the .sitepath.pth file for the given importable name
 
    mvp       - print the contents of a simple setup.py for a given package path.
-             - e.g. python -m sitepath mvp my_project > setup.py
+             - e.g. python -m sitepath mvp my_project > pyproject.toml
 
    help      - show this message
 '''.format(version=__version__))
@@ -172,7 +172,7 @@ def process(argv, top):
         return
 
     elif cmd in ['-h', '--help', 'help']:
-        show_help()
+        show_help(top)
         return
 
     elif cmd == 'link':
