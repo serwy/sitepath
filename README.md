@@ -3,9 +3,9 @@
 When making an importable Python library, there needs to be a middle ground between:
 
 1. writing some code, and
-2. packaging that can publish to PyPI.
+2. building a package that can publish to PyPI.
 
-Your code's directory is a package already. No extra packaging is required.
+Your code's directory _is_ a package already. No extra packaging is required.
 
 Using `sitepath` along with `pip` can allow locally developed code to coexist with PyPI-available libraries.
 
@@ -127,11 +127,9 @@ __The `pyproject.toml` file should NOT be used to distribute the project on PyPI
 ## Commentary
 
 ### Developing with .pth files
-The `develop` command takes its name from the setuptools interface.
-It adds the project directory to `sys.path` automatically, by
-placing the path in `site-packages/easy-install.pth`.
+The `develop` command takes its name from the setuptools interface. It works by adding the directory containing your code to `sys.path`. This is done at startup by the `site` module, which finds the directories listed in `site-packages/easy-install.pth`.
 
-The downside of using `develop` (from setup.py and from sitepath) is that everything in the path is potentially top-level importable, since the path is added to `sys.path`. This is a consequence of using `.pth` files.
+The downside of using `develop` (from setup.py and from sitepath) is that everything in the path is potentially top-level importable. This is a consequence of using `.pth` files.
 
 The preferred method is to use `link` instead of `develop`, if your platform permits it.
 
@@ -139,7 +137,7 @@ The preferred method is to use `link` instead of `develop`, if your platform per
 
 Commands that modify a site-packages directory leave a `[package].sitepath` crumb file for each package it copies/links, and this crumb is needed to modify or remove an existing package. This crumb distinguishes sitepath packages from everything else.
 
-### Packaging and Distribution
+### Building, Packaging and Distribution
 
 Using `sitepath` removes the need of dealing with the tedious minutia of PyPA packaging requirements from early development stages. In time, more packaging may be needed, or sitepath may be adequate for your needs, especially for internally developed code without an internal package repository.
 
