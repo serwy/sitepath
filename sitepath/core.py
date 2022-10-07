@@ -399,23 +399,20 @@ def process(argv, top):
         head, tail = os.path.split(p)
         name, _ = os.path.splitext(tail)
 
-        src = '''# minimum-viable-packaging > setup.py
-# For the most recent way to do it, visit:
-# https://packaging.python.org/en/latest/tutorials/packaging-projects/
-from setuptools import setup
-setup(
-    name={name},
-    packages=[{name}],
-    # author="your name",
-    # author_email="youremail@example.com",
-    # url="https://yoursite.com/yourproject",
-    # license="your license",
-    # description="a description of your project",
-    # long_description=open('README.md').read(),
-    # keywords="",
-    # classifiers=["Development Status :: 1 - Planning", ],
-)
-'''.format(name=repr(name))
+        src = '''# (redirect output) > pyproject.toml
+# See: https://packaging.python.org/en/latest/tutorials/packaging-projects/
+[project]
+name = %s
+version = "0.0.0"
+# authors = [ {name="Name", email="you@example.com"}, ]
+# description = ""
+# readme = "README.md"
+# license = {file="LICENSE.txt"}
+# requires-python = ">=3.3"
+# classifiers = [ "Development Status :: 1 - Planning", ]
+# urls = {"Home-page" = "http://example.com'}
+''' % repr(name)
+
         fprint(stdout, src)
 
     else:

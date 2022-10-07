@@ -11,7 +11,7 @@ Using `sitepath` along with `pip` can allow locally developed code to coexist wi
 
 ## Examples
 
-The directory `my_project` has your Python code. Let's make it importable, work within virtual environments, and not need setup.py.
+The directory `my_project` has your Python code. Let's make it importable, work within virtual environments, and not need setup.py or pyproject.toml.
 
     python -m sitepath link my_project/
 
@@ -117,11 +117,12 @@ They are:
 
 ### Minimum Viable Packaging
 
-If you want to have an initial setup.py, use the `mvp` command:
+If you want to have an initial `pyproject.toml`, use the `mvp` command and redirect
+its output:
 
-    python -m sitepath mvp my_project > setup.py
+    python -m sitepath mvp my_project > pyproject.toml
 
-__This `setup.py` file should NOT be used to distribute the project on PyPI.__ It's missing many required fields.
+__The `pyproject.toml` file should NOT be used to distribute the project on PyPI.__ It's missing many fields that should be completed.
 
 ## Commentary
 
