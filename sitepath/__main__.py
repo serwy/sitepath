@@ -26,8 +26,8 @@ top = core.SitePathTop()
 try:
     core.process(argv, top)
 except core.SitePathException as err:
-    print('Error:', err, file=sys.stderr)
+    print('\nError:', err, file=sys.stderr)
     sys.exit(1)
 except core.SitePathFailure as err:
-    print('Failure:', err, file=sys.stderr)
+    print('\nFailure:', err, file=sys.stderr)
     sys.exit(2)

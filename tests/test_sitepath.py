@@ -43,7 +43,6 @@ class TestSitePath(unittest.TestCase):
 
         my_file = tmp_dir / 'my_file.py'
 
-
         stderr = io.StringIO()
         stdout = io.StringIO()
 
@@ -64,16 +63,18 @@ class TestSitePath(unittest.TestCase):
         cwd = str(tmp_dir)
 
         self.top = core.SitePathTop(
-            asp=[str(site_packages)],
+            sp=[str(site_packages)],
             usp=str(user_site_packages),
             syspath=[str(site_packages), str(tmp_dir)],
             cwd=cwd,
             stdout=stdout,
             stderr=stderr,
             enable_user_site=True,
+            now='1999-12-31T23:59:59.999999',
         )
 
         vars(self).update(locals())
+
 
     def tearDown(self):
         shutil.rmtree(self.tmp_dir, ignore_errors=True)
@@ -108,10 +109,13 @@ class TestSitePath(unittest.TestCase):
 
         self.do('link my_project')
 
-        self.assertTrue((self.site_packages / 'my_project').is_symlink())
+        p = (self.site_packages / 'my_project')
+        self.assertTrue(p.is_symlink())
+        self.assertEqual(p.readlink(), self.my_project)
 
         self.do('unlink my_project')
         self.assertFalse((self.site_packages / 'my_project').exists())
+
 
     def test_copy(self):
         self.do('copy my_project')
@@ -184,10 +188,68 @@ class TestSitePath(unittest.TestCase):
         self.do('undevelop my_file')
         self.assertFalse(spf.exists())
 
+    def test_file_develop_contents(self):
+        spf = (self.site_packages / 'my_file.sitepath.pth')
+        self.do('develop my_file.py')
+        self.assertTrue(spf.exists())
+
+        pth = sitepath.crumb.get_pth(spf)
+        self.assertEqual(pth['pth'][0], str(self.tmp_dir))
+        self.assertEqual(pth['from'], str(self.my_file))
+
     def test_help(self):
         self.do('help')
         self.do('-h')
         self.do('--help')
+
+    def test_copy_from_list(self):
+        spf = (self.site_packages / 'my_file.py')
+        self.assertFalse(spf.exists())
+
+        req_file = self.tmp_dir / 'reqs.txt'
+        req_file.write_text(str(self.my_file))
+
+        self.do('copy -r ./reqs.txt')
+        self.assertTrue(spf.exists())
+
+    def test_develop_from_list(self):
+        sdf = self.site_packages / 'my_file.sitepath.pth'
+        sdd = self.site_packages / 'my_project.sitepath.pth'
+        self.assertFalse(sdf.exists())
+        self.assertFalse(sdd.exists())
+
+
+        req_file = self.tmp_dir / 'reqs.txt'
+        req_file.write_text('\n'.join([
+            str(self.my_project),
+            str(self.my_file)]))
+
+        self.do('develop -r ./reqs.txt')
+        self.assertTrue(sdd.exists())
+        self.assertTrue(sdf.exists())
+
+    def test_link_from_list(self):
+        if not self.can_symlink():
+            raise unittest.SkipTest('platform disallows symlinks')
+
+        spf = (self.site_packages / 'my_file.py')
+        self.assertFalse(spf.exists())
+
+        req_file = self.tmp_dir / 'reqs.txt'
+        req_file.write_text(str(self.my_file))
+
+        self.do('link -r ./reqs.txt')
+        self.assertTrue(spf.is_symlink())
+
+    def test_list_has_copy(self):
+        self.do('copy my_file.py')
+
+        x = io.StringIO()
+        self.top.stdout = x
+        self.do('list copies')
+
+        v = x.getvalue()
+        self.assertTrue(str(self.my_file) in v)
 
     # -- Test error conditions, invalid input, etc
 
@@ -207,7 +269,7 @@ class TestSitePath(unittest.TestCase):
     def test_conflict_link_existing(self):
         p = self.site_packages / 'my_project'
         p.mkdir()
-        with self.assertRaises(core.SitePathException):
+        with self.assertRaises(core.SitePathFailure):
             self.do('link my_project')
 
     def test_conflict_unlink_existing(self):
@@ -219,7 +281,7 @@ class TestSitePath(unittest.TestCase):
     def test_conflict_copy_existing(self):
         p = self.site_packages / 'my_project'
         p.mkdir()
-        with self.assertRaises(core.SitePathException):
+        with self.assertRaises(core.SitePathFailure):
             self.do('copy my_project')
 
     def test_bad_project(self):
@@ -243,7 +305,6 @@ class TestSitePath(unittest.TestCase):
     @unittest.skipIf(WINDOWS, 'Windows-platform')
     def test_no_user_site(self):
         # disable user site
-        self.top.asp.remove(self.top.usp)
         self.top.enable_user_site = False
 
         # remove write permission
@@ -276,6 +337,60 @@ class TestSitePath(unittest.TestCase):
     def test_bad_command(self):
         with self.assertRaises(core.SitePathException):
             self.do('invalid_command')
+
+    def test_non_identifier(self):
+        with self.assertRaises(core.SitePathFailure):
+            self.do('link not-identifier')
+
+        with self.assertRaises(core.SitePathFailure):
+            self.do('copy not-identifier')
+
+        with self.assertRaises(core.SitePathFailure):
+            self.do('develop not-identifier')
+
+
+    def test_mismatch_uncopy_from_list(self):
+        # create a different my_file, so that uncopy
+        # catches the wrong path
+        other_file = self.my_project / 'my_file.py'
+        other_file.write_text('x=1')
+
+        spf = (self.site_packages / 'my_file.py')
+        self.do('copy my_project/my_file.py')
+
+        req_file = self.tmp_dir / 'reqs.txt'
+        req_file.write_text(str(self.my_file))
+
+        with self.assertRaises(core.SitePathFailure):
+            self.do('uncopy -r ./reqs.txt')
+
+        self.do('uncopy -nr ./reqs.txt')
+
+    def test_missing_uncopy_from_list(self):
+        # create a different my_file, so that uncopy
+        # catches the wrong path
+
+        req_file = self.tmp_dir / 'reqs.txt'
+        req_file.write_text(str(self.my_file))
+
+        with self.assertRaises(core.SitePathFailure):
+            self.do('uncopy -r ./reqs.txt')
+
+    def test_mismatch_direct(self):
+        spf = (self.site_packages / 'my_file.py')
+        self.do('copy my_file.py')
+        self.do('uncopy my_file.py')
+        self.assertFalse(spf.exists())
+
+        self.do('copy my_file.py')
+        with self.assertRaises(core.SitePathFailure):
+            self.do('uncopy my_project/my_file.py')
+        self.assertTrue(spf.exists())
+
+        self.do('copy my_file.py')
+        # deliberate mismatch, read as a name with -n
+        self.do('uncopy -n my_project/my_file.py')
+        self.assertFalse(spf.exists())
 
 
 if __name__ == '__main__':

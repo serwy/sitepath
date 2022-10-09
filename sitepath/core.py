@@ -17,6 +17,7 @@
 import site
 import sys
 import os
+import io
 import pathlib
 from pprint import pprint
 import shutil
@@ -24,10 +25,9 @@ import datetime
 import json
 
 from ._version import __version__
-
-
-def fprint(file, *args, **kw):
-    print(*args, file=file, **kw)
+from . import ops
+from .crumb import *
+from .common import *
 
 
 class SystemDefault:
@@ -39,30 +39,27 @@ system = SystemDefault()
 
 class SitePathTop:
     def __init__(self,
-                 asp=system,
+                 sp=system,
                  usp=system,
                  syspath=system,
                  cwd=system,
                  stdout=system,
                  stderr=system,
-                 enable_user_site=system):
+                 enable_user_site=system,
+                 now=system,
+                 env=system):
 
         if cwd is system:
             cwd = os.getcwd()
 
-        if asp is system:
-            asp = site.getsitepackages()[:]   # all site packages
+        if sp is system:
+            sp = site.getsitepackages()[:]   # site packages
 
         if usp is system:
             usp = site.getusersitepackages()  # user site packages
 
         if enable_user_site is system:
             enable_user_site = site.ENABLE_USER_SITE
-
-        if enable_user_site:
-            if usp is not None:
-                if os.path.isdir(usp):
-                    asp.append(usp)
 
         if syspath is system:
             syspath = sys.path.copy()
@@ -73,7 +70,23 @@ class SitePathTop:
         if stderr is system:
             stderr = sys.stderr
 
+        if now is system:
+            now = datetime.datetime.now().isoformat()
+
+        if env is system:
+            env = dict(os.environ)
+
         vars(self).update(locals())
+
+    @property
+    def asp(self):   # all site packages
+        x = list(self.sp)
+        usp = self.usp
+        if self.enable_user_site:
+            if usp is not None:
+                if os.path.isdir(usp):
+                    x.append(usp)
+        return x
 
     def abspath(self, p):
         p = os.path.expanduser(p)
@@ -81,52 +94,6 @@ class SitePathTop:
         p = os.path.join(self.cwd, p)
         p = os.path.abspath(p)
         return p
-
-    @property
-    def now(self):
-        return datetime.datetime.now().isoformat()
-
-class SitePathException(ValueError):
-    pass
-
-
-class SitePathFailure(RuntimeError):
-    # everything has been tried, nothing succeeded
-    pass
-
-
-def norm_path(p):
-    p = str(p)
-    if p.endswith('.py'):
-        p = p[:-3]
-    return p
-
-
-def place_crumb(p, d):
-    f = norm_path(p) + '.sitepath'
-    with open(f, 'w') as fp:
-        json.dump(d, fp)
-
-
-def has_crumb(p):
-    f = norm_path(p) + '.sitepath'
-    return os.path.isfile(f)
-
-
-def remove_crumb(p):
-    f = norm_path(p) + '.sitepath'
-    os.remove(f)
-
-
-def get_crumb(p):
-    f = norm_path(p) + '.sitepath'
-    with open(f, 'r') as fp:
-        src = fp.read()
-    try:
-        d = json.loads(src)
-    except:
-        d = {'contents': src}
-    return d
 
 
 def show_help(top):
@@ -146,15 +113,55 @@ Commands available:
    mvp       - print the contents of a simple setup.py for a given package path.
              - e.g. python -m sitepath mvp my_project > pyproject.toml
 
+   list      - print out a list of sitepath sources [links, copies, develops]
+
    help      - show this message
 '''.format(version=__version__))
 
 
-def _check_ext(what):
-    package, ext  = os.path.splitext(what)
-    if ext:
-        raise SitePathException('Did you mean %r?' % (
-            package, ))
+
+def _proc_args(top, arg, un):
+    # helper for core functionality
+
+    if len(arg) == 0:
+        return [None]
+
+    path_to_name = False
+    skip_errors = False
+    todo = []
+
+    if arg[0] == '-n':
+        path_to_name = True
+        arg.pop(0)
+
+    if arg[0] in ('-r', '-nr'):  # -r for read
+        if arg[0] == '-nr':
+            path_to_name = True
+
+        file = top.abspath(arg[1])
+        with open(file, 'r') as fp:
+            lines = fp.readlines()
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            if line[0] == '#':
+                continue
+            todo.append(line)
+    else:
+        while arg:
+            item = arg.pop(0)
+            if item is None:
+                continue
+            todo.append(item)
+
+    if path_to_name:
+        if not un:
+            fprint(top.stderr,
+                   'note: using -n or -nr has an effect with un-commands only.')
+
+    return result._using('items=todo, skip_errors, path_to_name', locals())
+
 
 def process(argv, top):
 
@@ -175,221 +182,45 @@ def process(argv, top):
         show_help(top)
         return
 
-    elif cmd == 'link':
-        what = arg[2]
-        if what is None:
-            raise SitePathException('Need a directory or file to link')
+    elif cmd in ('link', 'unlink', 'copy', 'uncopy', 'develop', 'undevelop'):
+        un = cmd.startswith('un')
+        cmd_info = _proc_args(top, arg[2:], un)
+        collected = []
 
-        p = top.abspath(what)
-        if not os.path.exists(p):
-            raise SitePathException('package not found: %r' % p)
-
-        head, tail = os.path.split(p)
-
-        tried = []
-        for sp in top.asp:
-            dst = os.path.join(sp, tail)
-
-            if has_crumb(dst):
-                if os.path.islink(dst):
-                    os.remove(dst)
-
-                if os.path.exists(dst):
-                    raise SitePathException('Already copied: %r' % (dst, ))
-
-            else:
-                if os.path.exists(dst):
-                    raise SitePathException('Already exists: %r' % (dst, ))
-
-            tried.append(dst)
-            try:
-                os.symlink(p, dst, target_is_directory=True)
-                _, base = os.path.split(dst)
-
-                place_crumb(dst, {'when':top.now, 'from':p, 'how':'link',
-                                  'base':base})
-
-                fprint(stdout, 'Linking: %r --> %r' % (dst, p))
-                break
-            except OSError as err:
-                fprint(stderr,
-                        'Unable to link %r\n%s' % (dst, err))
-        else:
-            raise SitePathFailure(
-                'Unable to link anywhere.\nTried:\n    %s' % ('\n    '.join(tried)))
-
-    elif cmd == 'unlink':
-        what = arg[2]
-        if what is None:
-            raise SitePathException('Need a project name to unlink')
-
-        _check_ext(what)
-
-        tried = []
-        for sp in top.asp:
-            p = what
-            p = os.path.join(sp, p)
-
-            # check for crumb
-            if not has_crumb(p):
-                tried.append(p + '.sitepath')
-                continue
-
-            # open the crumb, get the undo data
-            c = get_crumb(p)
-            base = c['base']
-
-            target = os.path.join(sp, base)
-            if os.path.islink(target):
-                fprint(stdout, 'Unlinking: %r --> %r' % (target, os.readlink(target)))
-                os.remove(target)
-                remove_crumb(target)
-                break
-            else:
-                fprint(stderr, 'Expected a symlink: %r' % p)
-        else:
-            raise SitePathFailure(
-                'Package not found: %r\nTried:\n    %s' % (
-                    what, '    \n'.join(tried)))
-
-    elif cmd == 'copy':
-        what = arg[2]
-        if what is None:
-            raise SitePathException('Need a directory to copy')
-
-        p = top.abspath(what)
-
-        head, tail = os.path.split(p)
-        if not os.path.exists(p):
-            raise SitePathException('project not found: %r' % p)
-
-        for sp in top.asp:
-            dst = os.path.join(sp, tail)
-
-            if os.path.exists(dst):
-                if not has_crumb(dst):
-                    raise SitePathException(
-                        'Existing project not copied by sitepath: %r' % dst)
-
-            if os.path.islink(dst):
-                raise SitePathException('Already linked: %r' % (dst, ))
-
-            try:
-                if has_crumb(dst):
-                    c = get_crumb(dst)
-                    fprint(stdout, 'prior crumb: ', c)
-
-                fprint(stdout, 'Copying: %r --> %r' % (p, dst))
-                if os.path.isdir(p):
-                    shutil.rmtree(dst, ignore_errors=True)
-                    shutil.copytree(p, dst)
-                elif os.path.isfile(p):
-                    shutil.copy(p, dst)
+        ecount = 0
+        fcount = 0
+        for what in cmd_info.items:
+            if what is None:
+                if un:
+                    raise SitePathException('Need a package name')
                 else:
-                    raise SitePathException(
-                        'Expecting a directory or file: %r' % p)
-
-                _, base = os.path.split(dst)
-
-                place_crumb(dst, {'when':top.now, 'from':p, 'how':'copy',
-                                  'base':base})
-                break
-
-            except OSError as err:
-                fprint(stderr, 'Unable to copy: %s\n%s' % (dst, err))
-
-        else:
-            raise SitePathFailure('Unable to copy anywhere.')
-
-    elif cmd == 'uncopy':
-        what = arg[2]
-        if what is None:
-            raise SitePathException('Need a project name to unlink')
-
-        _check_ext(what)
-
-        tried = []
-        for sp in top.asp:
-            p = what
-            p = os.path.join(sp, p)
-
-            # check for crumbs
-            if not os.path.exists(p + '.sitepath'):
-                tried.append(p + '.sitepath')
-                continue
-
-            # open the crumb, get the undo data
-            c = get_crumb(p)
-            base = c['base']
-
-            target = os.path.join(sp, base)
-            fprint(stdout, 'Deleting: %r' % (target,))
-            if os.path.isdir(target):
-                shutil.rmtree(target)
-            elif os.path.isfile(target):
-                os.remove(target)
-            else:
-                # has crumb but not a dir or file
-                # raise a warning
-                pass
-            fprint(stdout, 'deleted crumb:', c)
-            remove_crumb(target)
-            break
-
-        else:
-            raise SitePathFailure(
-                'Package not found: %r\nTried:\n    %s' % (
-                    what, '\n    '.join(tried)))
-
-    elif cmd == 'develop':
-        what = arg[2]
-        if what is None:
-            raise SitePathException('Need a directory to develop')
-
-        p = top.abspath(what)
-        if not os.path.exists(p):
-            raise SitePathException('Package not found: %r' % p)
-
-
-        devpath, filename = os.path.split(p)
-        package, _  = os.path.splitext(filename)
-
-        tried = []
-
-        for sp in top.asp:
-            p = os.path.join(sp, '%s.sitepath.pth' % package)
+                    raise SitePathException('Need a directory or file')
             try:
-                with open(p, 'a') as fp:
-                    print(devpath, file=fp)
-                fprint(stdout, 'Developing %r in %r' % (devpath, p))
-                break
-            except OSError as err:
-                tried.append(p)
-        else:
-            raise SitePathFailure('Unable to create %s.sitepath.pth' % package)
+                func = getattr(ops, cmd)
+                func(top, what, cmd_info)
+            except (SitePathException, SitePathFailure) as err:
+                if isinstance(err, SitePathException):
+                    ecount += 1
+                elif isinstance(err, SitePathFailure):
+                    fcount += 1
+                collected.append((what, err))
 
-    elif cmd == 'undevelop':
-        what = arg[2]
-        if what is None:
-            raise SitePathException('Need a project name to unlink')
+        errs = io.StringIO()
+        success = len(cmd_info.items) - len(collected)
 
-        _check_ext(what)
+        if collected:
+            if len(cmd_info.items) > 1:
+                fprint(errs, 'Result (success=%i, errors=%i, failures=%i)' % (
+            success, ecount, fcount))
 
-        package = what
+            for what, err in collected:
+                fprint(errs, '- %s %r\n    - %s' % (cmd, what, err))
 
-        tried = []
-        for sp in top.asp:
-            p = os.path.join(sp, '%s.sitepath.pth' % package)
-            tried.append(p)
-            if os.path.exists(p):
-                fprint(stdout, 'Deleting %r' % (p, ))
-                os.remove(p)
-                break
-        else:
-            head, tail = os.path.split(p)
-            raise SitePathFailure(
-                '%r not found.\nTried:\n    %s' % (
-                    tail, '\n    '.join(tried)))
+        s = errs.getvalue()
+        if fcount:
+            raise SitePathFailure(s)
+        elif ecount:
+            raise SitePathException(s)
 
     elif cmd == 'mvp':
         what = arg[2]
@@ -410,13 +241,88 @@ version = "0.0.0"
 # license = {file="LICENSE.txt"}
 # requires-python = ">=3.3"
 # classifiers = [ "Development Status :: 1 - Planning", ]
-# urls = {"Home-page" = "http://example.com'}
+# urls = {"Home-page" = "http://example.com"}
 ''' % repr(name)
 
         fprint(stdout, src)
 
+
+    elif cmd == 'list':
+        what = arg[2]
+        if what is None:
+            raise SitePathException('Expecting links, copies, or develops')
+        status = _get_status(top)
+
+        todo = set()
+        for what in arg[2:]:
+            if what is None:
+                break
+
+            if what in ['links', 'link', 'symlinks', 'syms']:
+                todo.add('links')
+            elif what in ['copies', 'copy', 'copied']:
+                todo.add('copies')
+            elif what in ['dev', 'devs', 'developed', 'develop', 'develops']:
+                todo.add('develops')
+            elif what in ['all']:
+                todo.update(['links', 'copies', 'develops'])
+            else:
+                raise SitePathException('not recognized: %r' % what)
+
+        if 'links' in todo:
+            fprint(stdout, '# sitepath-symlinked')
+            for p in status.syms:
+                try:
+                    fprint(stdout, os.readlink(p))
+                except:
+                    fprint(stdout, '# Error: unable to readlink %r' % p)
+
+        if 'copies' in todo:
+            fprint(stdout, '# sitepath-copied')
+            for p in status.copies:
+                c = get_crumb(p)
+                fprint(stdout,  c.get('from', '# error: %r' % p))
+
+        if 'develops' in todo:
+            fprint(stdout, '# sitepath-developed')
+            for p in status.dev:
+                try:
+                    with open(p, 'r') as fp:
+                        dp = fp.read()
+                    fprint(stdout, dp.strip())
+                except:
+                    fprint(stdout, '# Error: unable to open %r' % p)
+
     else:
         raise SitePathException('Command not recognized: %r' % cmd)
+
+
+def _get_status(top):
+
+    dev = []
+    pth = []
+    for d in top.asp:
+        d = pathlib.Path(d)
+        pth_list = sorted(d.glob('*.pth'))
+        for name in pth_list:
+            pth.append(name)
+            if str(name).endswith('.sitepath.pth'):
+                dev.append(name)
+
+    syms = []
+    copies = []
+    links = []
+    for d in top.asp:
+        d = pathlib.Path(d)
+        if d.is_dir():
+            for item in sorted(d.iterdir()):
+                if has_crumb(item):
+                    if item.is_symlink():
+                        syms.append(item)
+                    else:
+                        copies.append(item)
+
+    return result._using('dev, pth, syms, copies, links', locals())
 
 
 def info(top):
@@ -427,9 +333,11 @@ def info(top):
     print( 'sitepath %s' % __version__)
     print( '-' * 60)
     print()
-    v = os.environ.get('VIRTUAL_ENV', None)
-    if v is not None:
-        print( 'VIRTUAL_ENV=%s' % v)
+
+    for evar in ('VIRTUAL_ENV', 'PYTHONPATH', 'PYTHONHOME'):
+        v = top.env.get(evar, None)
+        if v is not None:
+            print( '%s=%s' % (evar, v))
 
     print( 'sys.executable = %r' % sys.executable)
 
@@ -453,42 +361,41 @@ def info(top):
     for p in top.asp:
         print( '    %s' % str(p))
 
+    status = _get_status(top)
     print()
     print( 'Active .pth files:')
-    dev = []
-    for d in top.asp:
-        d = pathlib.Path(d)
-        pth_list = sorted(d.glob('*.pth'))
-        for name in pth_list:
-            print( '    %s' % str(name))
-            if str(name).endswith('.sitepath.pth'):
-                dev.append(name)
 
-    syms = []
-    copies = []
-    for d in top.asp:
-        d = pathlib.Path(d)
-        if d.is_dir():
-            for item in d.iterdir():
-                if has_crumb(item):
-                    if item.is_symlink():
-                        syms.append(item)
-                    else:
-                        copies.append(item)
+    for name in status.pth:
+        print( '    %s' % str(name))
+
+    syms = status.syms
+    copies = status.copies
+    dev = status.dev
 
     print()
-    print( 'sitepath-symlinked packages: %i found' % len(syms))
-    for s in syms:
-        print( '    %s --> %s' % (s, s.readlink()))
+    print( 'sitepath-symlinked packages: %i found' % len(status.syms))
+    for s in status.syms:
+        src = s.readlink()
+        if os.path.exists(src):
+            print( '    %s --> %s' % (s, src))
+        else:
+            print( '??? %s --> %s (broken)' % (s, src))
 
-    print( 'sitepath-copied packages:    %i found' % len(copies))
-    for s in copies:
-        print( '    %s' % (s, ))
+    print( 'sitepath-copied packages:    %i found' % len(status.copies))
+    for s in status.copies:
+        c = get_crumb(s)
+        src = c.get('from', '# error: %r' % c)
+        print( '    %s  <--  %s' % (s, src))
 
-    print( 'sitepath-developed packages: %i found' % len(dev))
-    for s in dev:
-        print( '    %s' % (s, ))
-
+    print( 'sitepath-developed packages: %i found' % len(status.dev))
+    for s in status.dev:
+        c = get_pth(s)
+        src = c.get('pth', ['# error: %r' % s])
+        if len(src) == 1:
+            print( '    %s  >>>  %s' % (s, src[0]))
+        else:
+            # the file has been modified outside sitepath
+            print( '??? %s  >>>  %s' % (s, src))
     print()
 
     return locals()
