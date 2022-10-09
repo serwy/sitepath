@@ -342,7 +342,7 @@ version = "0.0.0"
             for p in status.syms:
                 try:
                     fprint(stdout, os.readlink(p))
-                except:
+                except OSError:
                     fprint(stdout, '# Error: unable to readlink %r' % p)
 
         if 'copies' in todo:
@@ -356,13 +356,18 @@ version = "0.0.0"
             for d in status.dev:
                 try:
                     c, cfile = get_pth(d)
-                    f = c.get('from')
-                    if f is None:
-                        f = '# error: missing "from" in %r' % (str(d),)
-                    fprint(stdout, f)
-                except:
-                    raise
-                    fprint(stdout, '# Error: unable to open %r' % d)
+                except OSError:
+                    fprint(stdout, '# error: unable to open %r' % d)
+                    continue
+
+                if c is None:
+                    fprint(stdout, '# error: unable to open %r' % d)
+                    continue
+
+                f = c.get('from')
+                if f is None:
+                    f = '# error: missing "from" in %r' % (str(d),)
+                fprint(stdout, f)
 
     else:
         raise SitePathException('Command not recognized: %r' % cmd)
