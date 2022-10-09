@@ -38,15 +38,6 @@ class result:
         return cls(u)
 
 
-
-def check_ext(what):
-    package, ext  = os.path.splitext(what)
-    if ext:
-        raise SitePathException('Did you mean %r?' % (
-            package, ))
-
-
-
 class SitePathException(ValueError):
     pass
 
