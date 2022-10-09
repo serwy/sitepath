@@ -280,6 +280,12 @@ class TestSitePath(unittest.TestCase):
         self.do('copy my_project')
         self.do('info my_project')
 
+    def test_mvp(self):
+        self.do('mvp my_project')
+
+        with self.assertRaises(core.SitePathException):
+            self.do('mvp')
+
     # -- Test error conditions, invalid input, etc
 
     def test_link_copy(self):
@@ -363,6 +369,13 @@ class TestSitePath(unittest.TestCase):
         with self.assertRaises(core.SitePathException):
             self.do('undevelop')
 
+    def test_missing_args_hyphen(self):
+        with self.assertRaises(core.SitePathException):
+            self.do('unlink -r')
+
+        with self.assertRaises(core.SitePathException):
+            self.do('link -r DOES_NOT_EXIST')
+
     def test_bad_command(self):
         with self.assertRaises(core.SitePathException):
             self.do('invalid_command')
@@ -373,6 +386,9 @@ class TestSitePath(unittest.TestCase):
 
         with self.assertRaises(core.SitePathFailure):
             self.do('copy not-identifier')
+
+        with self.assertRaises(core.SitePathFailure):
+            self.do('uncopy not-identifier')
 
         with self.assertRaises(core.SitePathFailure):
             self.do('develop not-identifier')
