@@ -131,8 +131,6 @@ def unsymlink(top, what, cfg=None):
                 if needs_origin != top.abspath(rlink):
                     raise SitePathFailure('unlink path mismatch. need %r, found %r' % (
                         needs_origin, top.abspath(rlink)))
-                    #fprintf(stderr, 'no match')
-                    #continue
 
             os.remove(target)
             remove_crumb(target)
@@ -236,9 +234,8 @@ def uncopy(top, what, cfg=None):
         elif os.path.isfile(target):
             os.remove(target)
         else:
-            # has crumb but not a dir or file
-            # raise a warning
-            pass
+            raise SitePathFailure('not a directory or file: %r' % target)
+
         fprint(stdout, 'deleted crumb:', c)
         remove_crumb(target)
         fprint(stdout, 'deleted: %r' % (target,))
@@ -276,7 +273,6 @@ def develop(top, what, cfg=None):
         except OSError as err:
             tried.append(str(err))
     else:
-        #raise SitePathFailure('Unable to create %s.sitepath.pth.' % package)
         raise SitePathFailure(
             'Unable to create %s.sitepath.pth.\n    %s' % (package, '\n    '.join(tried)))
 
