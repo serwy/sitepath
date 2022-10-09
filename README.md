@@ -128,9 +128,13 @@ and then re-loaded in a different virtual environment:
 
     python -m sitepath copy -r sitepath-copies.txt
 
+To uncopy the packages:
+
+    python -m sitepath uncopy -r sitepath-copies.txt
+
 The `-r` works on the `un*` commands as well. It requires that the path from the file matches the existing state.
 
-Using `-nr` will extract the package name from each directory and batch that instead. This ignores mismatched directory errors when using unlink/uncopy/undevelop.
+Using `-nr` will use the package name implied by each directory/file path and batches that instead. This ignores mismatched directory errors that may occur when using unlink/uncopy/undevelop.
 
 
 ### Minimum Viable Packaging
