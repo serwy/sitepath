@@ -208,6 +208,17 @@ class TestSitePath(unittest.TestCase):
         self.assertEqual(pth['pth'][0], str(self.tmp_dir))
         self.assertEqual(pth['from'], str(self.my_file))
 
+    def test_list_has_develop(self):
+        self.do('develop my_file.py')
+
+        x = io.StringIO()
+        self.top.stdout = x
+        self.do('list develops')
+
+        v = x.getvalue().splitlines()
+        v_active = [i for i in v if i.strip() and not i.startswith('#')]
+        self.assertTrue(str(self.my_file) in v_active)
+
     def test_help(self):
         self.do('help')
         self.do('-h')

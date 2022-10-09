@@ -353,13 +353,16 @@ version = "0.0.0"
 
         if 'develops' in todo:
             fprint(stdout, '# sitepath-developed')
-            for p in status.dev:
+            for d in status.dev:
                 try:
-                    with open(p, 'r') as fp:
-                        dp = fp.read()
-                    fprint(stdout, dp.strip())
+                    c, cfile = get_pth(d)
+                    f = c.get('from')
+                    if f is None:
+                        f = '# error: missing "from" in %r' % (str(d),)
+                    fprint(stdout, f)
                 except:
-                    fprint(stdout, '# Error: unable to open %r' % p)
+                    raise
+                    fprint(stdout, '# Error: unable to open %r' % d)
 
     else:
         raise SitePathException('Command not recognized: %r' % cmd)
