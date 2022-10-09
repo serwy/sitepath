@@ -112,6 +112,7 @@ They are:
 - `uncopy [name]`
 - `develop [directory]`
 - `undevelop [name]`
+- `info [names/directories]`
 - `list [symlinks, copies, develops]`
 - `mvp [name]`
 - `help`

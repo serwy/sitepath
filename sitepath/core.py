@@ -112,9 +112,12 @@ Commands:
     uncopy          Delete the package name from site-packages.
     develop         Add the parent of the dir/file to [package].sitepath.pth.
     undevelop       Remove [package].sitepath.pth.
+
+    info            Given detailed information about packages and crumbs.
     list            List by given package type (symlinks, copies, develops).
     mvp             Given a name, print the content of a minimum viable
                     pyproject.toml file.
+
     help,
     -h, --help      Show this help message
 
@@ -192,6 +195,10 @@ def _proc_args(top, arg, un):
     return result._using('items=todo, skip_errors, path_to_name', locals())
 
 
+def indent_error(err):
+    return '\n    '.join(str(err).splitlines())
+
+
 def process(argv, top):
 
     stdout = top.stdout
@@ -204,7 +211,7 @@ def process(argv, top):
     cmd = arg[1]
 
     if cmd is None:
-        info(top)
+        default_info(top)
         return
 
     elif cmd in ['-h', '--help', 'help']:
@@ -212,7 +219,7 @@ def process(argv, top):
         return
 
     elif cmd in ('symlink', 'unsymlink', 'link', 'unlink',
-                 'copy', 'uncopy', 'develop', 'undevelop'):
+                 'copy', 'uncopy', 'develop', 'undevelop', 'info'):
 
         # allow for short-hand
         if cmd == 'link':
@@ -220,9 +227,17 @@ def process(argv, top):
         elif cmd == 'unlink':
             cmd = 'unsymlink'
 
+
         un = cmd.startswith('un')
         cmd_info = _proc_args(top, arg[2:], un)
         collected = []
+
+
+        if cmd_info.items[0] is None:
+            if cmd == 'info':
+                status = _get_status(top)
+                cmd_info.path_to_name = False
+                cmd_info.items = sorted(status.names)
 
         ecount = 0
         fcount = 0
@@ -252,7 +267,7 @@ def process(argv, top):
             success, ecount, fcount))
 
             for what, err in collected:
-                fprint(errs, '- %s %r\n    - %s' % (cmd, what, err))
+                fprint(errs, '- %s %r\n    - %s' % (cmd, what, indent_error(err)))
 
         s = errs.getvalue()
         if fcount:
@@ -297,7 +312,8 @@ version = "0.0.0"
             if what is None:
                 break
 
-            if what in ['symlinks', 'syms', 'sym', 'symlinked', 'symlink', 's']:
+            if what in ['symlinks', 'syms', 'sym', 'symlinked', 'symlink', 's',
+                        'links', 'link', 'linked']:
                 todo.add('symlinks')
             elif what in ['copies', 'copy', 'copied', 'c']:
                 todo.add('copies')
@@ -319,7 +335,7 @@ version = "0.0.0"
         if 'copies' in todo:
             fprint(stdout, '# sitepath-copied')
             for p in status.copies:
-                c = get_crumb(p)
+                c, cfile = get_crumb(p)
                 fprint(stdout,  c.get('from', '# error: %r' % p))
 
         if 'develops' in todo:
@@ -338,6 +354,8 @@ version = "0.0.0"
 
 def _get_status(top):
 
+    names = set()
+
     dev = []
     pth = []
     for d in top.asp:
@@ -347,10 +365,11 @@ def _get_status(top):
             pth.append(name)
             if str(name).endswith('.sitepath.pth'):
                 dev.append(name)
+                n, _, _ = name.name.rsplit('.', maxsplit=2)
+                names.add(n)
 
     syms = []
     copies = []
-    links = []
     for d in top.asp:
         d = pathlib.Path(d)
         if d.is_dir():
@@ -358,13 +377,15 @@ def _get_status(top):
                 if has_crumb(item):
                     if item.is_symlink():
                         syms.append(item)
+                        names.add(item.name)
                     else:
                         copies.append(item)
+                        names.add(item.name)
 
-    return result._using('dev, pth, syms, copies, links', locals())
+    return result._using('dev, pth, syms, copies, names', locals())
 
 
-def info(top):
+def default_info(top):
     stdout = top.stdout
     print = lambda *args, **kw: fprint(stdout, *args, **kw)
 
@@ -418,23 +439,26 @@ def info(top):
         if os.path.exists(src):
             print( '    %s --> %s' % (s, src))
         else:
-            print( '??? %s --> %s (broken)' % (s, src))
+            print( '!!! %s --> %s (broken)' % (s, src))
 
     print( 'sitepath-copied packages:    %i found' % len(status.copies))
     for s in status.copies:
-        c = get_crumb(s)
+        c, cfile = get_crumb(s)
         src = c.get('from', '# error: %r' % c)
-        print( '    %s  <--  %s' % (s, src))
+        if os.path.exists(src):
+            print( '    %s <-- %s' % (s, src))
+        else:
+            print( "?   %s <-- %s (doesn't exist)" % (s, src))
 
     print( 'sitepath-developed packages: %i found' % len(status.dev))
     for s in status.dev:
-        c = get_pth(s)
+        c, cfile = get_pth(s)
         src = c.get('pth', ['# error: %r' % s])
         if len(src) == 1:
             print( '    %s  >>>  %s' % (s, src[0]))
         else:
             # the file has been modified outside sitepath
-            print( '??? %s  >>>  %s' % (s, src))
+            print( '?   %s  >>>  %s' % (s, src))
     print()
 
     return locals()

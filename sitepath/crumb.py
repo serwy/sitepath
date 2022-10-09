@@ -42,18 +42,28 @@ def remove_crumb(p):
 
 def get_crumb(p):
     f = norm_path(p) + '.sitepath'
-    with open(f, 'r') as fp:
-        src = fp.read()
-    try:
-        d = json.loads(src)
-    except:
-        d = {'contents': src}
-    return d
+    if os.path.isfile(f):
+        with open(f, 'r') as fp:
+            src = fp.read()
+        try:
+            d = json.loads(src)
+        except:
+            d = {'contents': src}
+    else:
+        d = None
+
+    return d, f
 
 
 def get_pth(p):
-    p = norm_path(p)
-    assert p.endswith('.sitepath.pth')
+    p = str(p)
+    if not p.endswith('.sitepath.pth'):
+        return None, p
+
+    if not os.path.isfile(p):
+        return None, p
+
+
     with open(p, 'r') as fp:
         lines = fp.readlines()
 
@@ -78,4 +88,5 @@ def get_pth(p):
             continue
 
         d['pth'].append(line.strip())
-        return d
+
+    return d, p

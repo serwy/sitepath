@@ -30,6 +30,17 @@ import sitepath
 from sitepath import core
 
 
+
+
+def _write_text(path, s):  # Python 3.4
+    with open(str(path), 'w') as fp:
+        fp.write(s)
+
+def _read_text(path):   # Python 3.4
+    with open(str(path), 'r') as fp:
+        return fp.read()
+
+
 class TestSitePath(unittest.TestCase):
 
     def setUp(self):
@@ -100,7 +111,7 @@ class TestSitePath(unittest.TestCase):
 
         return self._can_symlink
 
-    def test_info(self):
+    def test_default_info(self):
         self.do()
 
     def test_link(self):
@@ -111,7 +122,7 @@ class TestSitePath(unittest.TestCase):
 
         p = (self.site_packages / 'my_project')
         self.assertTrue(p.is_symlink())
-        self.assertEqual(p.readlink(), self.my_project)
+        self.assertEqual(os.readlink(str(p)), str(self.my_project))
 
         self.do('unsymlink my_project')
         self.assertFalse((self.site_packages / 'my_project').exists())
@@ -131,7 +142,7 @@ class TestSitePath(unittest.TestCase):
 
         sd = self.site_packages / 'my_project.sitepath.pth'
         self.assertTrue(sd.exists())
-        self.assertTrue(self.cwd in sd.read_text())
+        self.assertTrue(self.cwd in _read_text(sd))
 
         self.do('undevelop my_project')
         self.assertFalse(sd.exists())
@@ -193,7 +204,7 @@ class TestSitePath(unittest.TestCase):
         self.do('develop my_file.py')
         self.assertTrue(spf.exists())
 
-        pth = sitepath.crumb.get_pth(spf)
+        pth, file = sitepath.crumb.get_pth(spf)
         self.assertEqual(pth['pth'][0], str(self.tmp_dir))
         self.assertEqual(pth['from'], str(self.my_file))
 
@@ -207,7 +218,7 @@ class TestSitePath(unittest.TestCase):
         self.assertFalse(spf.exists())
 
         req_file = self.tmp_dir / 'reqs.txt'
-        req_file.write_text(str(self.my_file))
+        _write_text(req_file, str(self.my_file))
 
         self.do('copy -r ./reqs.txt')
         self.assertTrue(spf.exists())
@@ -220,7 +231,7 @@ class TestSitePath(unittest.TestCase):
 
 
         req_file = self.tmp_dir / 'reqs.txt'
-        req_file.write_text('\n'.join([
+        _write_text(req_file, '\n'.join([
             str(self.my_project),
             str(self.my_file)]))
 
@@ -236,7 +247,7 @@ class TestSitePath(unittest.TestCase):
         self.assertFalse(spf.exists())
 
         req_file = self.tmp_dir / 'reqs.txt'
-        req_file.write_text(str(self.my_file))
+        _write_text(req_file, str(self.my_file))
 
         self.do('symlink -r ./reqs.txt')
         self.assertTrue(spf.is_symlink())
@@ -250,6 +261,13 @@ class TestSitePath(unittest.TestCase):
 
         v = x.getvalue()
         self.assertTrue(str(self.my_file) in v)
+
+    def test_info(self):
+        self.do('info')
+        with self.assertRaises(core.SitePathFailure):
+            self.do('info my_project')
+        self.do('copy my_project')
+        self.do('info my_project')
 
     # -- Test error conditions, invalid input, etc
 
@@ -353,13 +371,13 @@ class TestSitePath(unittest.TestCase):
         # create a different my_file, so that uncopy
         # catches the wrong path
         other_file = self.my_project / 'my_file.py'
-        other_file.write_text('x=1')
+        _write_text(other_file, 'x=1')
 
         spf = (self.site_packages / 'my_file.py')
         self.do('copy my_project/my_file.py')
 
         req_file = self.tmp_dir / 'reqs.txt'
-        req_file.write_text(str(self.my_file))
+        _write_text(req_file, str(self.my_file))
 
         with self.assertRaises(core.SitePathFailure):
             self.do('uncopy -r ./reqs.txt')
@@ -371,7 +389,7 @@ class TestSitePath(unittest.TestCase):
         # catches the wrong path
 
         req_file = self.tmp_dir / 'reqs.txt'
-        req_file.write_text(str(self.my_file))
+        _write_text(req_file, str(self.my_file))
 
         with self.assertRaises(core.SitePathFailure):
             self.do('uncopy -r ./reqs.txt')

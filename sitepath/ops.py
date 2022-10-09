@@ -85,7 +85,7 @@ def symlink(top, what, cfg=None):
             os.symlink(p, dst, target_is_directory=True)
             _, base = os.path.split(dst)
 
-            place_crumb(dst, {'when':top.now, 'from':p, 'how':'link',
+            place_crumb(dst, {'when':top.now, 'from':p, 'how':'symlink',
                               'base':base})
 
             fprint(stdout, '%s: %r --> %r' % (command, dst, p))
@@ -121,7 +121,7 @@ def unsymlink(top, what, cfg=None):
             continue
 
         # open the crumb, get the undo data
-        c = get_crumb(p)
+        c, cfile = get_crumb(p)
         base = c['base']
 
         target = os.path.join(sp, base)
@@ -143,7 +143,7 @@ def unsymlink(top, what, cfg=None):
     else:
         raise SitePathFailure(
             'Package not found: %r\nTried:\n    %s' % (
-                ident, '    \n'.join(tried)))
+                ident, '\n    '.join(tried)))
 
 
 def copy(top, what, cfg=None):
@@ -169,7 +169,7 @@ def copy(top, what, cfg=None):
 
         try:
             if has_crumb(dst):
-                c = get_crumb(dst)
+                c, cfile = get_crumb(dst)
                 fprint(stdout, 'prior crumb: ', c)
 
             if os.path.isdir(p):
@@ -218,7 +218,7 @@ def uncopy(top, what, cfg=None):
             continue
 
         # open the crumb, get the undo data
-        c = get_crumb(p)
+        c, cfile = get_crumb(p)
         base = c['base']
 
         if needs_origin:
@@ -295,4 +295,59 @@ def undevelop(top, what, cfg=None):
         head, tail = os.path.split(p)
         raise SitePathFailure(
             '%r not found.\nTried:\n    %s' % (
+                ident, '\n    '.join(tried)))
+
+
+def info(top, what, cfg=None):
+    # print out the crumb contents
+    stdout, stderr = top.stdout, top.stderr
+    x = _uncommand(top, what)
+    needs_origin = x.needs_origin
+    ident = x.ident
+
+    if cfg and cfg.path_to_name:
+        needs_origin = False
+
+    tried = []
+    for sp in top.asp:
+        base = os.path.join(sp, ident)
+
+        c, cfile = get_crumb(base)
+        p, pfile = get_pth(base + '.sitepath.pth')
+
+        if c is None and p is None:
+            tried.append(cfile)
+            tried.append(pfile)
+            continue
+
+        # It is possible to have a developed and linked/copied package.
+        # I'm not going to stop you.
+        for d, dfile in [(c, cfile), (p, pfile)]:
+            if d is None:
+                continue
+
+            kvf = '%10s: %s'  # formatting string
+            fprint(stdout, 'info: %r' % ident)
+            fprint(stdout, kvf % ('crumb', dfile))
+            for key in sorted(d, reverse=True):
+                value = d[key]
+
+                s = []
+                if key == 'from':
+                    if not os.path.exists(value):
+                        if 'link' in d.get('how', ''):
+                            s.append('(broken)')
+                        else:
+                            s.append('(missing)')
+                    if needs_origin:
+                        if value != needs_origin:
+                            s.append('(mismatched to %r)' % needs_origin)
+                if s:
+                    value = value + ' ' + ' '.join(s)
+
+                fprint(stdout,  kvf % (key, value))
+        break
+    else:
+        raise SitePathFailure(
+            'Package not found: %r\nTried:\n    %s' % (
                 ident, '\n    '.join(tried)))
