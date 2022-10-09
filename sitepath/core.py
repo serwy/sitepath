@@ -359,7 +359,7 @@ def process(argv, top):
         for sp in top.asp:
             p = os.path.join(sp, '%s.sitepath.pth' % package)
             try:
-                with open(p, 'a') as fp:
+                with open(p, 'w') as fp:
                     print(devpath, file=fp)
                 fprint(stdout, 'Developing %r in %r' % (devpath, p))
                 break
