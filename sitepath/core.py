@@ -97,25 +97,44 @@ class SitePathTop:
 
 
 def show_help(top):
-    fprint(top.stdout, '''  sitepath {version}
+    fprint(top.stdout,
+'''sitepath {version}
 ----------------------------------
-Commands available:
 
-   link      - symlink a given file/directory to site-packages
-   unlink    - unlink the given importable name, if it was linked.
+Usage:
 
-   copy      - copy a given file/directory to site-packages
-   uncopy    - delete a given importable name, if it was copied.
+    python -m sitepath <command> [options] [name/dirs/files]
 
-   develop   - add the parent directory of a project to a .sitepath.pth file
-   undevelop - removes the .sitepath.pth file for the given importable name
+Commands:
+    symlink         Symlink a given directory/file to site-packages.
+    unsymlink       Remove a symlink for a package name or directory/file.
+    copy            Copy a given directory/file to site-packages.
+    uncopy          Delete the package name from site-packages.
+    develop         Add the parent of the dir/file to [package].sitepath.pth.
+    undevelop       Remove [package].sitepath.pth.
+    list            List by given package type (symlinks, copies, develops).
+    mvp             Given a name, print the content of a minimum viable
+                    pyproject.toml file.
+    help,
+    -h, --help      Show this help message
 
-   mvp       - print the contents of a simple setup.py for a given package path.
-             - e.g. python -m sitepath mvp my_project > pyproject.toml
+General Options:
+    -r <file>       Batch process directory/file lines in given <file>.
+    -n              Translate directory/file to its package name
+    -nr <file>      Treat directory/file names as package names
+                    Useful for unlink/uncopy/undevelop
 
-   list      - print out a list of sitepath sources [links, copies, develops]
+Examples:
 
-   help      - show this message
+    # Copy a project
+    python -m sitepath copy ./my_project
+    python -c "import my_project"
+
+    # Save the copy paths, remove the copies, and then re-copy
+    python -m sitepath list copies > copies.txt
+    python -m sitepath uncopy -r copies.txt
+    python -m sitepath copy -r copies.txt
+
 '''.format(version=__version__))
 
 
@@ -138,7 +157,14 @@ def _proc_args(top, arg, un):
         if arg[0] == '-nr':
             path_to_name = True
 
+        if arg[1] is None:
+            raise SitePathException("Expecting a file.")
+
         file = top.abspath(arg[1])
+
+        if not os.path.exists(file):
+            raise SitePathException("File not found %r" % file)
+
         with open(file, 'r') as fp:
             lines = fp.readlines()
         for line in lines:
@@ -154,6 +180,9 @@ def _proc_args(top, arg, un):
             if item is None:
                 continue
             todo.append(item)
+
+        if len(todo) == 0:
+            todo.append(None)
 
     if path_to_name:
         if not un:
@@ -182,7 +211,7 @@ def process(argv, top):
         show_help(top)
         return
 
-    elif cmd in ('link', 'unlink', 'copy', 'uncopy', 'develop', 'undevelop'):
+    elif cmd in ('symlink', 'unsymlink', 'copy', 'uncopy', 'develop', 'undevelop'):
         un = cmd.startswith('un')
         cmd_info = _proc_args(top, arg[2:], un)
         collected = []
@@ -192,9 +221,10 @@ def process(argv, top):
         for what in cmd_info.items:
             if what is None:
                 if un:
-                    raise SitePathException('Need a package name')
+                    raise SitePathException(
+                        'Need a package name, directory, or file path.')
                 else:
-                    raise SitePathException('Need a directory or file')
+                    raise SitePathException('Need a directory or file path.')
             try:
                 func = getattr(ops, cmd)
                 func(top, what, cmd_info)
@@ -250,7 +280,8 @@ version = "0.0.0"
     elif cmd == 'list':
         what = arg[2]
         if what is None:
-            raise SitePathException('Expecting links, copies, or develops')
+            raise SitePathException(
+                'Expecting "symlinks", "copies", "develops", or "all".')
         status = _get_status(top)
 
         todo = set()
@@ -258,18 +289,18 @@ version = "0.0.0"
             if what is None:
                 break
 
-            if what in ['links', 'link', 'symlinks', 'syms']:
-                todo.add('links')
-            elif what in ['copies', 'copy', 'copied']:
+            if what in ['symlinks', 'syms', 'sym', 'symlinked', 'symlink', 's']:
+                todo.add('symlinks')
+            elif what in ['copies', 'copy', 'copied', 'c']:
                 todo.add('copies')
-            elif what in ['dev', 'devs', 'developed', 'develop', 'develops']:
+            elif what in ['develops', 'dev', 'devs', 'developed', 'develop', 'd']:
                 todo.add('develops')
             elif what in ['all']:
-                todo.update(['links', 'copies', 'develops'])
+                todo.update(['symlinks', 'copies', 'develops'])
             else:
                 raise SitePathException('not recognized: %r' % what)
 
-        if 'links' in todo:
+        if 'symlinks' in todo:
             fprint(stdout, '# sitepath-symlinked')
             for p in status.syms:
                 try:

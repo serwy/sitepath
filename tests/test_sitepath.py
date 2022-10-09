@@ -107,13 +107,13 @@ class TestSitePath(unittest.TestCase):
         if not self.can_symlink():
             raise unittest.SkipTest('platform disallows symlinks')
 
-        self.do('link my_project')
+        self.do('symlink my_project')
 
         p = (self.site_packages / 'my_project')
         self.assertTrue(p.is_symlink())
         self.assertEqual(p.readlink(), self.my_project)
 
-        self.do('unlink my_project')
+        self.do('unsymlink my_project')
         self.assertFalse((self.site_packages / 'my_project').exists())
 
 
@@ -148,8 +148,8 @@ class TestSitePath(unittest.TestCase):
         if not self.can_symlink():
             raise unittest.SkipTest('platform disallows symlinks')
 
-        self.do('link my_project')
-        self.do('link my_project')
+        self.do('symlink my_project')
+        self.do('symlink my_project')
         self.assertTrue((self.site_packages / 'my_project').is_symlink())
 
     def test_recopy(self):
@@ -176,9 +176,9 @@ class TestSitePath(unittest.TestCase):
             raise unittest.SkipTest('platform disallows symlinks')
 
         spf = (self.site_packages / 'my_file.py')
-        self.do('link my_file.py')
+        self.do('symlink my_file.py')
         self.assertTrue(spf.exists())
-        self.do('unlink my_file')
+        self.do('unsymlink my_file')
         self.assertFalse(spf.exists())
 
     def test_file_develop(self):
@@ -238,7 +238,7 @@ class TestSitePath(unittest.TestCase):
         req_file = self.tmp_dir / 'reqs.txt'
         req_file.write_text(str(self.my_file))
 
-        self.do('link -r ./reqs.txt')
+        self.do('symlink -r ./reqs.txt')
         self.assertTrue(spf.is_symlink())
 
     def test_list_has_copy(self):
@@ -257,26 +257,26 @@ class TestSitePath(unittest.TestCase):
         if not self.can_symlink():
             raise unittest.SkipTest('platform disallows symlinks')
 
-        self.do('link my_project')
+        self.do('symlink my_project')
         with self.assertRaises(core.SitePathException):
             self.do('copy my_project')
 
     def test_copy_link(self):
         self.do('copy my_project')
         with self.assertRaises(core.SitePathException):
-            self.do('link my_project')
+            self.do('symlink my_project')
 
     def test_conflict_link_existing(self):
         p = self.site_packages / 'my_project'
         p.mkdir()
         with self.assertRaises(core.SitePathFailure):
-            self.do('link my_project')
+            self.do('symlink my_project')
 
     def test_conflict_unlink_existing(self):
         p = self.site_packages / 'my_project'
         p.mkdir()
         with self.assertRaises(core.SitePathFailure):
-            self.do('unlink my_project')
+            self.do('unsymlink my_project')
 
     def test_conflict_copy_existing(self):
         p = self.site_packages / 'my_project'
@@ -286,7 +286,7 @@ class TestSitePath(unittest.TestCase):
 
     def test_bad_project(self):
         with self.assertRaises(core.SitePathException):
-            self.do('link not_my_project')
+            self.do('symlink not_my_project')
         with self.assertRaises(core.SitePathException):
             self.do('copy not_my_project')
         with self.assertRaises(core.SitePathException):
@@ -294,7 +294,7 @@ class TestSitePath(unittest.TestCase):
 
     def test_not_found(self):
         with self.assertRaises(core.SitePathFailure):
-            self.do('unlink not_my_project')
+            self.do('unsymlink not_my_project')
 
         with self.assertRaises(core.SitePathFailure):
             self.do('uncopy not_my_project')
@@ -317,10 +317,10 @@ class TestSitePath(unittest.TestCase):
 
     def test_missing_args(self):
         with self.assertRaises(core.SitePathException):
-            self.do('link')
+            self.do('symlink')
 
         with self.assertRaises(core.SitePathException):
-            self.do('unlink')
+            self.do('unsymlink')
 
         with self.assertRaises(core.SitePathException):
             self.do('copy')
@@ -340,7 +340,7 @@ class TestSitePath(unittest.TestCase):
 
     def test_non_identifier(self):
         with self.assertRaises(core.SitePathFailure):
-            self.do('link not-identifier')
+            self.do('symlink not-identifier')
 
         with self.assertRaises(core.SitePathFailure):
             self.do('copy not-identifier')

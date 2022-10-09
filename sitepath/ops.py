@@ -46,7 +46,7 @@ def _uncommand(top, what):
     return result._using('ident, needs_origin', locals())
 
 
-def link(top, what, cfg=None):
+def symlink(top, what, cfg=None):
     stdout, stderr = top.stdout, top.stderr
 
     p = top.abspath(what)
@@ -62,12 +62,12 @@ def link(top, what, cfg=None):
     for sp in top.asp:
         dst = os.path.join(sp, tail)
 
-        command = 'Linked'
+        command = 'Symlinked'
         if has_crumb(dst):
             if os.path.islink(dst):
                 prior = os.readlink(dst)
                 if top.abspath(prior) == top.abspath(p):
-                    command == 'Linked'
+                    command == 'Symlinked'
                 else:
                     command = 'Relinked'
                 os.remove(dst)
@@ -99,7 +99,7 @@ def link(top, what, cfg=None):
             'Unable to link anywhere.\nTried:\n    %s' % ('\n    '.join(tried)))
 
 
-def unlink(top, what, cfg=None):
+def unsymlink(top, what, cfg=None):
     stdout, stderr = top.stdout, top.stderr
 
     x = _uncommand(top, what)

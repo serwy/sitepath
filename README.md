@@ -13,19 +13,19 @@ Using `sitepath` along with `pip` can allow locally developed code to coexist wi
 
 The directory `my_project` has your Python code. Let's make it importable, work within virtual environments, and not need setup.py or pyproject.toml.
 
-    python -m sitepath link my_project/
+    python -m sitepath symlink ./my_project
 
 Done. It symlinked the directory to a user-writable site-packages directory.
 
 If you don't want it importable anymore:
 
-    python -m sitepath unlink my_project
+    python -m sitepath unsymlink my_project
 
 Done.
 
 On Windows, you might get an error because symlinks are not supported unless you have [special permissions.](https://docs.python.org/3/library/os.html#os.symlink)  Instead, you can use:
 
-    python -m sitepath copy my_project/
+    python -m sitepath copy ./my_project
 
 This creates a separate copy of your code in a user-writable site-packages directory.
 
@@ -35,7 +35,7 @@ If you want to remove it:
 
 If you like the using `python setup.py develop` or editable installs with `pip install -e` for development:
 
-    python -m sitepath develop my_project/
+    python -m sitepath develop ./my_project
 
 This will add the given project path to `my_project.sitepath.pth` in a user-writeable site-packages directory.
 
@@ -61,7 +61,7 @@ But if you really want it from PyPI:
 
 Calling `python -m sitepath` prints out useful information about your Python (virtual) environment:
 
-- virtual environment variables
+- relevant environment variables
 - sys.executable
 - sys.path
 - user site-packages path
@@ -71,7 +71,7 @@ Calling `python -m sitepath` prints out useful information about your Python (vi
 
 ```
 ------------------------------------------------------------
-sitepath 0.3.0
+sitepath
 ------------------------------------------------------------
 
 VIRTUAL_ENV=/home/serwy/venv-py/iso
@@ -106,14 +106,32 @@ To see the list of commands:
     python -m sitepath help
 
 They are:
-- `link [directory]`
-- `unlink [name]`
+- `symlink [directory]`
+- `unsymlink [name]`
 - `copy [directory]`
 - `uncopy [name]`
 - `develop [directory]`
 - `undevelop [name]`
+- `list [symlinks, copies, develops]`
 - `mvp [name]`
 - `help`
+
+### Batch Processing
+
+The `-r [file]` argument can be used to batch process a list of directories in a file. Blank lines and comment lines starting with `#` are ignored.
+
+The list of linked/copied/developed packages can be saved:
+
+    python -m sitepath list copies > sitepath-copies.txt
+
+and then re-loaded in a different virtual environment:
+
+    python -m sitepath copy -r sitepath-copies.txt
+
+The `-r` works on the `un*` commands as well. It requires that the path from the file matches the existing state.
+
+Using `-nr` will extract the package name from each directory and batch that instead. This ignores mismatched directory errors when using unlink/uncopy/undevelop.
+
 
 ### Minimum Viable Packaging
 
@@ -122,7 +140,7 @@ its output:
 
     python -m sitepath mvp my_project > pyproject.toml
 
-__The `pyproject.toml` file should NOT be used to distribute the project on PyPI.__ It's missing many fields that should be completed.
+__This `pyproject.toml` file should NOT be used to distribute the project on PyPI.__ It's missing many fields that should be completed first.
 
 ## Commentary
 
@@ -131,7 +149,7 @@ The `develop` command takes its name from the setuptools interface. It works by 
 
 The downside of using `develop` (from setup.py and from sitepath) is that everything in the path is potentially top-level importable. This is a consequence of using `.pth` files.
 
-The preferred method is to use `link` instead of `develop`, if your platform permits it.
+The preferred method is to use `symlink` instead of `develop`, if your platform permits it.
 
 ### Modifying site-packages
 
