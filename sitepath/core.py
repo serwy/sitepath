@@ -211,7 +211,15 @@ def process(argv, top):
         show_help(top)
         return
 
-    elif cmd in ('symlink', 'unsymlink', 'copy', 'uncopy', 'develop', 'undevelop'):
+    elif cmd in ('symlink', 'unsymlink', 'link', 'unlink',
+                 'copy', 'uncopy', 'develop', 'undevelop'):
+
+        # allow for short-hand
+        if cmd == 'link':
+            cmd = 'symlink'
+        elif cmd == 'unlink':
+            cmd = 'unsymlink'
+
         un = cmd.startswith('un')
         cmd_info = _proc_args(top, arg[2:], un)
         collected = []
