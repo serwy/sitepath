@@ -79,14 +79,26 @@ class SitePathTop:
         vars(self).update(locals())
 
     @property
-    def asp(self):   # all site packages
-        x = list(self.sp)
+    def orig_asp(self):   # all site packages
+        sites = list(self.sp)
         usp = self.usp
         if self.enable_user_site:
             if usp is not None:
                 if os.path.isdir(usp):
-                    x.append(usp)
-        return x
+                    sites.append(usp)
+        return sites
+
+    @property
+    def asp(self):
+        sites = self.orig_asp
+        v = self.env.get('VIRTUAL_ENV', None)
+        if v is not None:
+            if v in sites:
+                # push the venv root to the back of the list
+                # so that the venv site-packages comes first
+                sites.remove(v)
+                sites.append(v)
+        return sites
 
     def abspath(self, p):
         p = os.path.expanduser(p)
@@ -420,7 +432,7 @@ def default_info(top):
 
     print()
     print( 'Active site-packages:')
-    for p in top.asp:
+    for p in top.orig_asp:
         print( '    %s' % str(p))
 
     status = _get_status(top)
