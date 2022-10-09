@@ -371,6 +371,7 @@ def _get_status(top):
 
     syms = []
     copies = []
+
     for d in top.asp:
         d = pathlib.Path(d)
         if d.is_dir():

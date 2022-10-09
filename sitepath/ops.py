@@ -234,7 +234,9 @@ def uncopy(top, what, cfg=None):
         elif os.path.isfile(target):
             os.remove(target)
         else:
-            raise SitePathFailure('not a directory or file: %r' % target)
+            if os.path.exists(target):
+                raise SitePathFailure('not a directory or file: %r' % target)
+            # we have a crumb without a package, clear the crumb
 
         fprint(stdout, 'deleted crumb:', c)
         remove_crumb(target)
