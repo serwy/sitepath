@@ -119,7 +119,7 @@ They are:
 
 ### Batch Processing
 
-The `-r [file]` argument can be used to batch process a list of directories in a file. Blank lines and comment lines starting with `#` are ignored.
+The `-r <file>` argument can be used to batch process a list of directories in a file and works for almost all commands. Blank lines and comment lines starting with `#` are ignored.
 
 The list of linked/copied/developed packages can be saved:
 
@@ -133,7 +133,7 @@ To uncopy the packages:
 
     python -m sitepath uncopy -r sitepath-copies.txt
 
-The `-r` works on the `un*` commands as well. It requires that the path from the file matches the existing state.
+For the `un*` commands, `-r` requires that the path from the provided file matches the existing state found in the crumb, otherwise a mismatch failure occurs.
 
 Using `-nr` will use the package name implied by each directory/file path and batches that instead. This ignores mismatched directory errors that may occur when using unlink/uncopy/undevelop.
 
@@ -149,12 +149,13 @@ __This `pyproject.toml` file should NOT be used to distribute the project on PyP
 
 ## Commentary
 
-### Developing with .pth files
-The `develop` command takes its name from the setuptools interface. It works by adding the directory containing your code to `sys.path`. This is done at startup by the `site` module, which finds the directories listed in `site-packages/easy-install.pth`.
-
-The downside of using `develop` (from setup.py and from sitepath) is that everything in the path is potentially top-level importable. This is a consequence of using `.pth` files.
+### Develop and .pth files
 
 The preferred method is to use `symlink` instead of `develop`, if your platform permits it.
+
+The `develop` command takes its name from the setuptools interface. It works by adding the parent directory containing your code to `sys.path`. On Python startup, the [site module](https://docs.python.org/3/library/site.html) finds `site-packages/*.pth` files, which includes `easy-install.pth` populated by setuptool's develop command.
+
+The downside of using `develop` (from setup.py and from sitepath) is that everything in the path is potentially top-level importable. This is a consequence of using `.pth` files.
 
 ### Modifying site-packages
 
@@ -171,7 +172,6 @@ Unix, Linux, and MacOS have had symbolic links for decades, available without ne
 ## See Also:
 - Standard Library:
     - https://docs.python.org/3/library/site.html
-        - For information about `.pth` files during Python initialization
 - Packaging:
     - https://packaging.python.org/en/latest/tutorials/packaging-projects/
     - https://docs.python.org/3/distributing/index.html#publishing-python-packages
