@@ -262,9 +262,9 @@ def process(argv, top):
         success = len(cmd_info.items) - len(collected)
 
         if collected:
-            fprint(errs, '%i total' % len(collected))
+            fprint(errs, '(%i total)' % len(collected))
             for what, err in collected:
-                fprint(errs, '- %s %r\n    - %s' % (cmd, what, indent_error(err)))
+                fprint(errs, 'command: %s %r\n    - %s' % (cmd, what, indent_error(err)))
 
             if len(cmd_info.items) > 1:
                 fprint(errs, 'Result (success=%i, errors=%i, failures=%i)' % (

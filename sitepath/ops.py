@@ -80,7 +80,7 @@ def symlink(top, what, cfg=None):
             if os.path.exists(dst):
                 raise SitePathFailure('Already exists: %r' % (dst, ))
 
-        tried.append(dst)
+
         try:
             os.symlink(p, dst, target_is_directory=True)
             _, base = os.path.split(dst)
@@ -91,12 +91,11 @@ def symlink(top, what, cfg=None):
             fprint(stdout, '%s: %r --> %r' % (command, dst, p))
             break
         except OSError as err:
-            continue
-            fprint(stderr,
-                    'Unable to link %r\n%s' % (dst, err))
+            tried.append(str(err))
+
     else:
         raise SitePathFailure(
-            'Unable to link anywhere.\nTried:\n    %s' % ('\n    '.join(tried)))
+            'Unable to symlink anywhere.\n    %s' % ('\n    '.join(tried)))
 
 
 def unsymlink(top, what, cfg=None):
@@ -125,6 +124,7 @@ def unsymlink(top, what, cfg=None):
         base = c['base']
 
         target = os.path.join(sp, base)
+        tried.append(target)
         if os.path.islink(target):
             rlink = os.readlink(target)
             if needs_origin:
@@ -142,7 +142,7 @@ def unsymlink(top, what, cfg=None):
             raise SitePathFailure('Path is not a symlink: %r' % p)
     else:
         raise SitePathFailure(
-            'Package not found: %r\nTried:\n    %s' % (
+            'Package not found: %r. Tried:\n    %s' % (
                 ident, '\n    '.join(tried)))
 
 
@@ -154,15 +154,16 @@ def copy(top, what, cfg=None):
 
     head, tail = os.path.split(p)
     if not os.path.exists(p):
-        raise SitePathException('project not found: %r' % p)
+        raise SitePathException('path not found: %r' % p)
 
+    tried = []
     for sp in top.asp:
         dst = os.path.join(sp, tail)
 
         if os.path.exists(dst):
             if not has_crumb(dst):
                 raise SitePathFailure(
-                    'Existing project not copied by sitepath: %r' % dst)
+                    'Existing package not copied by sitepath: %r' % dst)
 
         if os.path.islink(dst):
             raise SitePathException('Already linked: %r. Unlink it then try again.' % (dst, ))
@@ -190,10 +191,12 @@ def copy(top, what, cfg=None):
             break
 
         except OSError as err:
+            tried.append(str(err))
             continue
 
     else:
-        raise SitePathFailure('Unable to copy anywhere.')
+        raise SitePathFailure(
+            'Unable to copy anywhere.\n    %s' % ('\n    '.join(tried)))
 
 
 def uncopy(top, what, cfg=None):
@@ -243,7 +246,7 @@ def uncopy(top, what, cfg=None):
 
     else:
         raise SitePathFailure(
-            'Package not found: %r\nTried:\n    %s' % (
+            'Package not found: %r. Tried:\n    %s' % (
                 ident, '\n    '.join(tried)))
 
 
@@ -254,7 +257,7 @@ def develop(top, what, cfg=None):
     package = _check_ident(p)
 
     if not os.path.exists(p):
-        raise SitePathException('Package not found: %r' % p)
+        raise SitePathException('path not found: %r' % p)
 
 
     devpath, filename = os.path.split(p)
@@ -271,9 +274,11 @@ def develop(top, what, cfg=None):
             fprint(stdout, 'Develop %r >>> %r' % (pth, devpath))
             break
         except OSError as err:
-            tried.append(pth)
+            tried.append(str(err))
     else:
-        raise SitePathFailure('Unable to create %s.sitepath.pth' % package)
+        #raise SitePathFailure('Unable to create %s.sitepath.pth.' % package)
+        raise SitePathFailure(
+            'Unable to create %s.sitepath.pth.\n    %s' % (package, '\n    '.join(tried)))
 
 
 def undevelop(top, what, cfg=None):
@@ -285,7 +290,8 @@ def undevelop(top, what, cfg=None):
 
     tried = []
     for sp in top.asp:
-        p = os.path.join(sp, '%s.sitepath.pth' % ident)
+        pth_file = '%s.sitepath.pth' % ident
+        p = os.path.join(sp, pth_file)
         tried.append(p)
         if os.path.exists(p):
             os.remove(p)
@@ -294,8 +300,8 @@ def undevelop(top, what, cfg=None):
     else:
         head, tail = os.path.split(p)
         raise SitePathFailure(
-            '%r not found.\nTried:\n    %s' % (
-                ident, '\n    '.join(tried)))
+            '%r not found. Tried:\n    %s' % (
+                pth_file, '\n    '.join(tried)))
 
 
 def info(top, what, cfg=None):
@@ -349,5 +355,5 @@ def info(top, what, cfg=None):
         break
     else:
         raise SitePathFailure(
-            'Package not found: %r\nTried:\n    %s' % (
+            'Package not found: %r. Tried:\n    %s' % (
                 ident, '\n    '.join(tried)))
