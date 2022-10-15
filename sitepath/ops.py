@@ -300,7 +300,7 @@ def info(top, what, flags=None):
                 continue
 
             kvf = '%10s: %s'  # formatting string
-            fprint(stdout, 'info: %r' % ident)
+            fprint(stdout, '%s:' % ident)
             fprint(stdout, kvf % ('crumb', dfile))
             for key in sorted(d, reverse=True):
                 value = d[key]
@@ -316,9 +316,9 @@ def info(top, what, flags=None):
                         if value != uflags.origin:
                             s.append('(mismatched to %r)' % uflags.origin)
                 if s:
-                    value = value + ' ' + ' '.join(s)
+                    value = value + ' # ' + ' '.join(s)
 
-                fprint(stdout,  kvf % (key, value))
+                fprint(stdout,  kvf % (key, repr(value)))
         break
     else:
         raise SitePathFailure(
