@@ -15,6 +15,7 @@
 ##
 
 import shutil
+import pathlib
 import sys
 import os
 
@@ -23,6 +24,7 @@ from .common import *
 
 
 def _check_ident(p):
+    p = str(p)
     head, tail = os.path.split(p)
     ident, _ = os.path.splitext(tail)
     if not ident.isidentifier():
@@ -30,217 +32,167 @@ def _check_ident(p):
     return ident
 
 
+def _link_copy(command, top, what, flags=None):
+    stdout, stderr = top.stdout, top.stderr
+
+    origin = top.abspath(what)   # origin path of the package.
+    base = origin.name
+    ident = _check_ident(origin)
+
+    if not origin.exists():
+        raise SitePathException('path not found: %r' % str(origin))
+
+    tried = []
+    for sp in top.asp:
+        dst = pathlib.Path(sp, base)
+
+        if dst.exists():
+            if not has_crumb(dst):
+                raise SitePathFailure(
+                    'Existing package not created by sitepath: %r' % dst)
+
+            # Ensure that the target is the correct type.
+            if command == 'symlink' and not dst.is_symlink():
+                raise SitePathException(
+                    'Target was copied, not symlinked: %r' % (str(dst), ))
+
+            elif command == 'copy' and dst.is_symlink():
+                raise SitePathException(
+                    'Target was symlinked, not copied: %r' % (str(dst), ))
+
+        # So far, if `dst` exists, it has a sitepath crumb, otherwise nothing is there.
+        if command == 'symlink':
+            cdir = '-->'
+            try:
+                if dst.exists():
+                    dst.unlink()
+                os.symlink(origin, dst, target_is_directory=True)
+                base = dst.name
+
+            except OSError as err:
+                tried.append(str(err))
+                continue
+
+        elif command == 'copy':
+            cdir = '<--'
+            try:
+                if origin.is_dir():
+                    shutil.rmtree(dst, ignore_errors=True)
+                    shutil.copytree(origin, dst)
+                elif origin.is_file():
+                    shutil.copy(origin, dst)
+                else:
+                    raise SitePathFailure(
+                        'Expecting a directory or file: %r' % str(origin))
+            except OSError as err:
+                tried.append(str(err))
+                continue
+
+        else:
+            raise SitePathFailure('unrecognized command: %r' % command)
+
+        # Successfully completed command, now place the sitepath crumb.
+        place_crumb(dst,
+            {
+                'when':top.now,
+                'from':str(origin),
+                'how': command,
+                'base':base
+            }
+        )
+        fprint(stdout, '%s: %r %s %r' % (command, str(dst), cdir, str(origin)))
+        # TODO: warn if file/dir conflict
+        break
+
+    else:
+        raise SitePathFailure(
+            'Unable to %s anywhere.\n    %s' % (command, '\n    '.join(tried)))
+
+
+
+def symlink(top, what, flags=None):
+    return _link_copy('symlink', top, what, flags)
+
+def copy(top, what, flags=None):
+    return _link_copy('copy', top, what, flags)
+
+
 def _uncommand(top, what):
     # helper for unlink/uncopy/undevelop
+    origin = ''
     if what.isidentifier():
         needs_origin = False
         ident = what
     else:
         p = top.abspath(what)
+        p = str(p)
         head, tail = os.path.split(p)
         ident, _ = os.path.splitext(tail)
         if not ident.isidentifier():
             raise SitePathFailure('not a valid Python identifier: %r' % ident)
-        needs_origin = p
+        needs_origin = True
+        origin = str(p)
 
-    return result._using('ident, needs_origin', locals())
+    return result._using('ident, needs_origin, origin', locals())
 
 
-def symlink(top, what, cfg=None):
+def _unlink_uncopy(command, top, what, flags=None):
     stdout, stderr = top.stdout, top.stderr
+    uflags = _uncommand(top, what)
 
-    p = top.abspath(what)
+    if flags and flags.path_to_name:
+        uflags.needs_origin = False
 
-    _check_ident(p)
-
-    if not os.path.exists(p):
-        raise SitePathException('path not found: %r' % p)
-
-    head, tail = os.path.split(p)
+    ident = uflags.ident
 
     tried = []
     for sp in top.asp:
-        dst = os.path.join(sp, tail)
+        p = str(pathlib.Path(sp, ident))
 
-        command = 'Symlinked'
-        if has_crumb(dst):
-            if os.path.islink(dst):
-                prior = os.readlink(dst)
-                if top.abspath(prior) == top.abspath(p):
-                    command == 'Symlinked'
-                else:
-                    command = 'Relinked'
-                os.remove(dst)
+        # Check for possible crumbs.
+        if not has_crumb(p):  # directory crumb
+            if has_crumb(p + '.py'):   # file crumb
+                p = p + '.py'
+            else:
+                tried.append(p + '.sitepath')
+                tried.append(p + '.py.sitepath')
+                continue
 
-
-            if os.path.exists(dst):
-                raise SitePathException('Already copied: %r' % (dst, ))
-
-        else:
-            if os.path.exists(dst):
-                raise SitePathFailure('Already exists: %r' % (dst, ))
-
-
-        try:
-            os.symlink(p, dst, target_is_directory=True)
-            _, base = os.path.split(dst)
-
-            place_crumb(dst, {'when':top.now, 'from':p, 'how':'symlink',
-                              'base':base})
-
-            fprint(stdout, '%s: %r --> %r' % (command, dst, p))
-            break
-        except OSError as err:
-            tried.append(str(err))
-
-    else:
-        raise SitePathFailure(
-            'Unable to symlink anywhere.\n    %s' % ('\n    '.join(tried)))
-
-
-def unsymlink(top, what, cfg=None):
-    stdout, stderr = top.stdout, top.stderr
-
-    x = _uncommand(top, what)
-
-    needs_origin = x.needs_origin
-    if cfg and cfg.path_to_name:
-        needs_origin = False
-
-    ident = x.ident
-
-    tried = []
-    for sp in top.asp:
-        p = ident
-        p = os.path.join(sp, p)
-
-        # check for crumb
-        if not has_crumb(p):
-            tried.append(p + '.sitepath')
-            continue
-
-        # open the crumb, get the undo data
+        # Open the crumb, get the undo data.
         c, cfile = get_crumb(p)
         base = c['base']
+
+        if uflags.needs_origin:
+            # compare paths
+            if uflags.origin != c['from']:
+                raise SitePathFailure('%s path mismatch. need %r, found %r' % (command,
+                        uflags.origin, c['from']))
 
         target = os.path.join(sp, base)
         tried.append(target)
-        if os.path.islink(target):
-            rlink = os.readlink(target)
-            if needs_origin:
-                if needs_origin != top.abspath(rlink):
-                    raise SitePathFailure('unlink path mismatch. need %r, found %r' % (
-                        needs_origin, top.abspath(rlink)))
 
-            os.remove(target)
-            remove_crumb(target)
-            fprint(stdout, 'Unlinked: %r --> %r' % (target, rlink))
-            break
-        else:
-            raise SitePathFailure('Path is not a symlink: %r' % p)
-    else:
-        raise SitePathFailure(
-            'Package not found: %r. Tried:\n    %s' % (
-                ident, '\n    '.join(tried)))
-
-
-def copy(top, what, cfg=None):
-    stdout, stderr = top.stdout, top.stderr
-    p = top.abspath(what)
-
-    _check_ident(p)
-
-    head, tail = os.path.split(p)
-    if not os.path.exists(p):
-        raise SitePathException('path not found: %r' % p)
-
-    tried = []
-    for sp in top.asp:
-        dst = os.path.join(sp, tail)
-
-        if os.path.exists(dst):
-            if not has_crumb(dst):
-                raise SitePathFailure(
-                    'Existing package not copied by sitepath: %r' % dst)
-
-        if os.path.islink(dst):
-            raise SitePathException('Already linked: %r. Unlink it then try again.' % (dst, ))
-
-        try:
-            if has_crumb(dst):
-                c, cfile = get_crumb(dst)
-                fprint(stdout, 'prior crumb: ', c)
-
-            if os.path.isdir(p):
-                shutil.rmtree(dst, ignore_errors=True)
-                shutil.copytree(p, dst)
-            elif os.path.isfile(p):
-                shutil.copy(p, dst)
+        if command == 'unsymlink':
+            if os.path.islink(target):
+                rlink = os.readlink(target) # TODO: sanity check the link
+                os.remove(target)
             else:
-                raise SitePathFailure(
-                    'Expecting a directory or file: %r' % p)
+                raise SitePathFailure('Path is not a symlink: %r' % p)
 
-            fprint(stdout, 'copied: %r --> %r' % (p, dst))
-
-            _, base = os.path.split(dst)
-
-            place_crumb(dst, {'when':top.now, 'from':p, 'how':'copy',
-                              'base':base})
-            break
-
-        except OSError as err:
-            tried.append(str(err))
-            continue
-
-    else:
-        raise SitePathFailure(
-            'Unable to copy anywhere.\n    %s' % ('\n    '.join(tried)))
-
-
-def uncopy(top, what, cfg=None):
-    stdout, stderr = top.stdout, top.stderr
-
-    x = _uncommand(top, what)
-    needs_origin = x.needs_origin
-
-    if cfg and cfg.path_to_name:
-        needs_origin = False
-
-    ident = x.ident
-
-    tried = []
-    for sp in top.asp:
-        p = ident
-        p = os.path.join(sp, p)
-
-        # check for crumbs
-        if not has_crumb(p):
-            tried.append(p + '.sitepath')
-            continue
-
-        # open the crumb, get the undo data
-        c, cfile = get_crumb(p)
-        base = c['base']
-
-        if needs_origin:
-            if needs_origin != c['from']:
-                raise SitePathFailure('uncopy path mismatch. need %r, found %r' % (
-                        needs_origin, c['from']))
-
-        target = os.path.join(sp, base)
-
-        if os.path.isdir(target):
-            shutil.rmtree(target)
-        elif os.path.isfile(target):
-            os.remove(target)
+        elif command == 'uncopy':
+            if os.path.isdir(target):
+                shutil.rmtree(target)
+            elif os.path.isfile(target):
+                os.remove(target)
+            else:
+                if os.path.exists(target):
+                    raise SitePathFailure('not a directory or file: %r' % target)
         else:
-            if os.path.exists(target):
-                raise SitePathFailure('not a directory or file: %r' % target)
-            # we have a crumb without a package, clear the crumb
+            raise SitePathFailure('unrecongnized command: %r' % command)
+
 
         fprint(stdout, 'deleted crumb:', c)
         remove_crumb(target)
-        fprint(stdout, 'deleted: %r' % (target,))
+        fprint(stdout, '%s: %r' % (command, target))
         break
 
     else:
@@ -249,7 +201,15 @@ def uncopy(top, what, cfg=None):
                 ident, '\n    '.join(tried)))
 
 
-def develop(top, what, cfg=None):
+def uncopy(top, what, flags=None):
+    return _unlink_uncopy('uncopy', top, what, flags)
+
+
+def unsymlink(top, what, flags=None):
+    return _unlink_uncopy('unsymlink', top, what, flags)
+
+
+def develop(top, what, flags=None):
     stdout, stderr = top.stdout, top.stderr
 
     p = top.abspath(what)
@@ -258,42 +218,52 @@ def develop(top, what, cfg=None):
     if not os.path.exists(p):
         raise SitePathException('path not found: %r' % p)
 
-
     devpath, filename = os.path.split(p)
+    pth_file = '%s.sitepath.pth' % package
 
     tried = []
-
     for sp in top.asp:
-        pth = os.path.join(sp, '%s.sitepath.pth' % package)
+        pth = os.path.join(sp, pth_file)
         try:
             with open(pth, 'w') as fp:
-                js = json.dumps({'when':top.now, 'from':p, 'how':'develop', 'base':package})
+                js = json.dumps(
+                    {
+                        'when':top.now,
+                        'from':str(p),
+                        'how':'develop',
+                        'base':package
+                    }
+                )
                 print('# sitepath: %s' % js, file=fp)
                 print(devpath, file=fp)
-            fprint(stdout, 'Develop %r >>> %r' % (pth, devpath))
+
+            fprint(stdout, 'develop: %r >>> %r' % (pth, devpath))
             break
         except OSError as err:
             tried.append(str(err))
     else:
         raise SitePathFailure(
-            'Unable to create %s.sitepath.pth.\n    %s' % (package, '\n    '.join(tried)))
+            'Unable to create %r.\n    %s' % (pth_file, '\n    '.join(tried)))
 
 
-def undevelop(top, what, cfg=None):
+def undevelop(top, what, flags=None):
     stdout, stderr = top.stdout, top.stderr
+    uflags = _uncommand(top, what)
+    if flags and flags.path_to_name:
+        uflags.needs_origin = False
 
-    x = _uncommand(top, what)
-    needs_origin = x.needs_origin
-    ident = x.ident
+    ident = uflags.ident
 
     tried = []
     for sp in top.asp:
         pth_file = '%s.sitepath.pth' % ident
+
         p = os.path.join(sp, pth_file)
+
         tried.append(p)
         if os.path.exists(p):
             os.remove(p)
-            fprint(stdout, 'Undeveloped %r' % (p, ))
+            fprint(stdout, 'undevelop: %r' % (p, ))
             break
     else:
         head, tail = os.path.split(p)
@@ -302,15 +272,14 @@ def undevelop(top, what, cfg=None):
                 pth_file, '\n    '.join(tried)))
 
 
-def info(top, what, cfg=None):
+def info(top, what, flags=None):
     # print out the crumb contents
     stdout, stderr = top.stdout, top.stderr
-    x = _uncommand(top, what)
-    needs_origin = x.needs_origin
-    ident = x.ident
+    uflags = _uncommand(top, what)
+    ident = uflags.ident
 
-    if cfg and cfg.path_to_name:
-        needs_origin = False
+    if flags and flags.path_to_name:
+        uflags.needs_origin = False
 
     tried = []
     for sp in top.asp:
@@ -343,9 +312,9 @@ def info(top, what, cfg=None):
                             s.append('(broken)')
                         else:
                             s.append('(missing)')
-                    if needs_origin:
-                        if value != needs_origin:
-                            s.append('(mismatched to %r)' % needs_origin)
+                    if uflags.needs_origin:
+                        if value != uflags.origin:
+                            s.append('(mismatched to %r)' % uflags.origin)
                 if s:
                     value = value + ' ' + ' '.join(s)
 

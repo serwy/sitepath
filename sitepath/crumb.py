@@ -18,10 +18,7 @@ import os
 import json
 
 def norm_path(p):
-    p = str(p)
-    if p.endswith('.py'):
-        p = p[:-3]
-    return p
+    return str(p)
 
 
 def place_crumb(p, d):

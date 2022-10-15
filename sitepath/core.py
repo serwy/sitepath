@@ -105,7 +105,7 @@ class SitePathTop:
         p = os.path.expandvars(p)
         p = os.path.join(self.cwd, p)
         p = os.path.abspath(p)
-        return p
+        return pathlib.Path(p)
 
 
 def show_help(top):

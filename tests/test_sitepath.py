@@ -57,7 +57,7 @@ class TestSitePath(unittest.TestCase):
         stderr = io.StringIO()
         stdout = io.StringIO()
 
-        if 0:
+        if os.environ.get('TEST_SITEPATH', '') == '1':
             stderr = sys.stderr
             stdout = sys.stdout
 
@@ -159,9 +159,11 @@ class TestSitePath(unittest.TestCase):
         if not self.can_symlink():
             raise unittest.SkipTest('platform disallows symlinks')
 
+        self.top.enable_user_site = False
         self.do('symlink my_project')
         self.do('symlink my_project')
         self.assertTrue((self.site_packages / 'my_project').is_symlink())
+        self.assertFalse((self.user_site_packages / 'my_project').is_symlink())
 
     def test_recopy(self):
         self.do('copy my_project')
