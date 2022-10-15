@@ -127,6 +127,7 @@ Commands:
 
     info            Given detailed information about packages and crumbs.
     list            List by given package type (symlinks, copies, develops).
+                    Also lists copied differences with 'changed'.
     mvp             Given a name, print the content of a minimum viable
                     pyproject.toml file.
 
@@ -317,7 +318,7 @@ version = "0.0.0"
         what = arg[2]
         if what is None:
             raise SitePathException(
-                'Expecting "symlinks", "copies", "develops", or "all".')
+                'Expecting "symlinks", "copies", "develops", "all" , or "changed".')
         status = _get_status(top)
 
         todo = set()
@@ -334,6 +335,8 @@ version = "0.0.0"
                 todo.add('develops')
             elif what in ['all']:
                 todo.update(['symlinks', 'copies', 'develops'])
+            elif what in ['changed', 'change', 'changes']:
+                todo.add('changes')
             else:
                 raise SitePathException('not recognized: %r' % what)
 
@@ -350,6 +353,18 @@ version = "0.0.0"
             for p in status.copies:
                 c, cfile = get_crumb(p)
                 fprint(stdout,  c.get('from', '# error: %r' % p))
+
+        if 'changes' in todo:
+            fprint(stdout, '# sitepath-copied and different')
+            for p in status.copies:
+                try:
+                    cr = ops._compare_crumb(p)
+                except SitePathFailure as f:
+                    fprint(stdout, '# ' + str(f))
+                    continue
+
+                if cr.changed:
+                    fprint(stdout, cr.origin)
 
         if 'develops' in todo:
             fprint(stdout, '# sitepath-developed')

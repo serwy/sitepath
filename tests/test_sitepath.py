@@ -288,6 +288,26 @@ class TestSitePath(unittest.TestCase):
         with self.assertRaises(core.SitePathException):
             self.do('mvp')
 
+    def test_compare_diff(self):
+        spf = (self.site_packages / 'my_file.py')
+        self.do('copy my_file.py')
+
+        x = io.StringIO()
+        self.top.stdout = x
+        self.do('list changed')
+
+        v = x.getvalue()
+        self.assertFalse(str(self.my_file) in v)
+
+        _write_text(spf, '1234')
+
+        x = io.StringIO()
+        self.top.stdout = x
+        self.do('list changed')
+
+        v = x.getvalue()
+        self.assertTrue(str(self.my_file) in v)
+
     # -- Test error conditions, invalid input, etc
 
     def test_link_copy(self):

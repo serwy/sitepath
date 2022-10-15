@@ -18,6 +18,7 @@ import shutil
 import pathlib
 import sys
 import os
+import filecmp
 
 from .crumb import *
 from .common import *
@@ -324,3 +325,34 @@ def info(top, what, flags=None):
         raise SitePathFailure(
             'Package not found: %r. Tried:\n    %s' % (
                 ident, '\n    '.join(tried)))
+
+
+def _compare_crumb(p):
+    c, cfile = get_crumb(p)
+    origin = c.get('from')
+    base = c.get('base')
+    if not os.path.exists(origin):
+        raise SitePathFailure('MISSING: package %r origin not found: %r' % (
+            base, origin))
+
+    head, tail = os.path.split(cfile)
+    src = os.path.join(head, base)
+    if not os.path.exists(src):
+        raise SitePathFailure('package for crumb missing: %r' % src)
+
+    changed = False
+    if os.path.isfile(src) and os.path.isfile(origin):
+        if not filecmp.cmp(src, origin, shallow=False):
+            changed = True
+    elif os.path.isdir(src) and os.path.isdir(origin):
+        dcmp = filecmp.dircmp(src, origin)
+        x = []
+        for attr in ['left_only', 'right_only', 'diff_files']:
+            x.extend(getattr(dcmp, attr))
+        if x:
+            changed = True
+
+    else:
+        changed = True
+
+    return result(locals())
