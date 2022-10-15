@@ -17,7 +17,7 @@ setup(
         'Topic :: Utilities',
         'Development Status :: 4 - Beta',
         'Operating System :: OS Independent',
-        'Programming Language :: Python :: 3.5',
+        'Programming Language :: Python :: 3.6',
         'License :: OSI Approved :: Apache Software License',
     ],
 )
